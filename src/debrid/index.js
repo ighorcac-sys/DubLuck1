@@ -4,12 +4,14 @@ const realDebrid = require('./realdebrid');
 const allDebrid = require('./alldebrid');
 const premiumize = require('./premiumize');
 const debridLink = require('./debridlink');
+const torbox = require('./torbox');
 
 const SERVICES = {
   realdebrid: realDebrid,
   alldebrid: allDebrid,
   premiumize: premiumize,
   debridlink: debridLink,
+  torbox: torbox,
 };
 
 /**

@@ -1,43 +1,57 @@
-async function getLink(magnet, token) {
-    try {
-        if (!magnet || !token) return null;
+const axios = require('axios');
 
-        // 1. Envia o magnet link para o TorBox
-        const response = await fetch('https://api.torbox.app/v1/api/torrents/createtorrent', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ magnet: magnet })
-        });
-        
-        const data = await response.json();
-        
-        // Proteção contra respostas inválidas ou tokens errados
-        if (!data || !data.success || !data.data) {
-            console.error('TorBox: Erro ao registrar torrent ou token inválido.', data);
-            return null;
-        }
+const TORBOX_BASE = 'https://api.torbox.app/v1/api';
 
-        const torrentId = data.data.torrent_id;
+async function resolve(apiKey, magnet) {
+  try {
+    // 1. Envia o magnet link para o TorBox via POST
+    const addRes = await axios.post(
+      `${TORBOX_BASE}/torrents/createtorrent`,
+      { magnet: magnet },
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    );
 
-        // 2. Pega a lista do torrent para extrair a URL final de streaming
-        const dlResponse = await fetch(`https://api.torbox.app/v1/api/torrents/mylist?id=${torrentId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const dlData = await dlResponse.json();
-        if (!dlData || !dlData.data) return null;
+    if (!addRes.data?.success || !addRes.data?.data) return null;
 
-        // Retorna a URL direta de download ou o link do primeiro arquivo disponível
-        return dlData.data.download_url || (dlData.data.files && dlData.data.files[0]?.short_link) || null;
+    const torrentId = addRes.data.data.torrent_id;
 
-    } catch (error) {
-        // Se der qualquer erro na API, ele apenas avisa o log em vez de derrubar o app
-        console.error('Erro isolado no motor do TorBox:', error.message);
-        return null;
-    }
+    // 2. Pega os detalhes do torrent para capturar os links de streaming
+    const infoRes = await axios.get(
+      `${TORBOX_BASE}/torrents/mylist?id=${torrentId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    );
+
+    const torrentData = infoRes.data?.data;
+    if (!torrentData) return null;
+
+    // Se o TorBox já entregar um link direto para o torrent completo
+    if (torrentData.download_url) return torrentData.download_url;
+
+    // Caso contrário, busca o maior arquivo de vídeo dentro dele
+    const files = torrentData.files;
+    if (!files || files.length === 0) return null;
+
+    const video = files
+      .filter(f => /\.(mkv|mp4|avi)$/i.test(f.name || ''))
+      .sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+
+    return video?.short_link || files[0]?.short_link || null;
+  } catch (err) {
+    console.error('[TorBox] Error:', err.message);
+    return null;
+  }
 }
 
-module.exports = { getLink };
+async function isValid(apiKey) {
+  try {
+    // Endpoint do TorBox para checar se o token do usuário é válido
+    const res = await axios.get(`${TORBOX_BASE}/user/me`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    return res.data?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { resolve, isValid };

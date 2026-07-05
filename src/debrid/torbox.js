@@ -1,7 +1,7 @@
 const fetch = require('node-fetch'); // ou a biblioteca que o addon usar
 
-async function resolve(apiKey, magnet) {
-try {
+async function getLink(magnet, token) {
+    try {
         // 1. Envia o magnet link para o TorBox
         const response = await fetch('https://api.torbox.app/v1/api/torrents/createtorrent', {
             method: 'POST',
